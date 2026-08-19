@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/genlayer-js";
+import { studionet } from "https://esm.sh/genlayer-js/chains";
 
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
@@ -11,32 +12,54 @@ const resultElement = document.getElementById("result");
 
 let walletAddress = null;
 
-function showError(error) {
-  console.error("Error:", error);
-
-  let message = "Unknown error.";
-
+function formatValue(value) {
   try {
-    if (error instanceof Error) {
-      message = error.message;
-    } else if (typeof error === "string") {
-      message = error;
-    } else {
-      message = JSON.stringify(
-        error,
-        (_, value) =>
-          typeof value === "bigint"
-            ? value.toString()
-            : value,
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+
+    if (value instanceof Error) {
+      return value.message || String(value);
+    }
+
+    if (typeof value === "object") {
+      return JSON.stringify(
+        value,
+        (_, item) =>
+          typeof item === "bigint"
+            ? item.toString()
+            : item,
         2
       );
     }
-  } catch {
-    message = String(error);
-  }
 
-  statusElement.textContent = message;
+    return String(value);
+  } catch {
+    return String(value);
+  }
 }
+
+function showError(error) {
+  console.error(error);
+
+  statusElement.textContent =
+    formatValue(error) || "Unknown error.";
+
+  resultElement.textContent = "";
+}
+
+
+/* =========================
+   CONNECT WALLET
+   ========================= */
 
 connectButton.addEventListener("click", async () => {
   try {
@@ -72,6 +95,11 @@ connectButton.addEventListener("click", async () => {
   }
 });
 
+
+/* =========================
+   REVIEW PROPOSAL
+   ========================= */
+
 reviewButton.addEventListener("click", async () => {
   try {
     if (!walletAddress) {
@@ -99,18 +127,20 @@ reviewButton.addEventListener("click", async () => {
     }
 
     statusElement.textContent =
-      "Submitting proposal to GenLayer...";
+      "Connecting to GenLayer Studionet...";
 
     resultElement.textContent = "";
 
     const client = createClient({
-      chain: "studionet",
+      chain: studionet,
       account: walletAddress,
       provider: window.ethereum
     });
 
+    await client.connect("studionet");
+
     statusElement.textContent =
-      "Sending transaction to GenLayer...";
+      "Sending proposal to GenLayer...";
 
     const txHash =
       await client.writeContract({
@@ -127,7 +157,8 @@ reviewButton.addEventListener("click", async () => {
       "Transaction submitted.";
 
     resultElement.textContent =
-      `Transaction:\n${String(txHash)}`;
+      `Transaction:\n${formatValue(txHash)}\n\n` +
+      "Waiting for GenLayer consensus...";
 
   } catch (error) {
     showError(error);
