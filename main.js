@@ -4,7 +4,7 @@ import { encodeFunctionData } from "https://esm.sh/viem";
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
 
-const STUDIONET_CHAIN_ID = "0xf1ef";
+const STUDIONET_CHAIN_ID = "0xf22f";
 
 const connectButton = document.getElementById("connect");
 const reviewButton = document.getElementById("review");
