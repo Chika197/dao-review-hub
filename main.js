@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/genlayer-js";
-import { studionet } from "https://esm.sh/genlayer-js/chains";
 
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
@@ -12,60 +11,38 @@ const resultElement = document.getElementById("result");
 
 let walletAddress = null;
 
-function formatValue(value) {
+function showError(error) {
+  console.error("Error:", error);
+
+  let message = "Unknown error.";
+
   try {
-    if (value === null || value === undefined) {
-      return "";
-    }
-
-    if (typeof value === "string") {
-      return value;
-    }
-
-    if (typeof value === "bigint") {
-      return value.toString();
-    }
-
-    if (value instanceof Error) {
-      return value.message || String(value);
-    }
-
-    if (typeof value === "object") {
-      return JSON.stringify(
-        value,
-        (_, item) =>
-          typeof item === "bigint"
-            ? item.toString()
-            : item,
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (typeof error === "string") {
+      message = error;
+    } else {
+      message = JSON.stringify(
+        error,
+        (_, value) =>
+          typeof value === "bigint"
+            ? value.toString()
+            : value,
         2
       );
     }
-
-    return String(value);
   } catch {
-    return String(value);
+    message = String(error);
   }
+
+  statusElement.textContent = message;
 }
-
-function showError(error) {
-  console.error("DAO Review error:", error);
-
-  statusElement.textContent =
-    formatValue(error) || "Unknown error.";
-
-  resultElement.textContent = "";
-}
-
-
-/* =========================
-   CONNECT WALLET
-   ========================= */
 
 connectButton.addEventListener("click", async () => {
   try {
     if (!window.ethereum) {
       throw new Error(
-        "Browser wallet not detected."
+        "Browser wallet tidak ditemukan."
       );
     }
 
@@ -77,12 +54,9 @@ connectButton.addEventListener("click", async () => {
         method: "eth_requestAccounts"
       });
 
-    if (
-      !accounts ||
-      accounts.length === 0
-    ) {
+    if (!accounts || accounts.length === 0) {
       throw new Error(
-        "No wallet account was returned."
+        "Wallet account tidak ditemukan."
       );
     }
 
@@ -97,11 +71,6 @@ connectButton.addEventListener("click", async () => {
     showError(error);
   }
 });
-
-
-/* =========================
-   REVIEW DAO PROPOSAL
-   ========================= */
 
 reviewButton.addEventListener("click", async () => {
   try {
@@ -130,18 +99,18 @@ reviewButton.addEventListener("click", async () => {
     }
 
     statusElement.textContent =
-      "Preparing GenLayer transaction...";
+      "Submitting proposal to GenLayer...";
 
     resultElement.textContent = "";
 
     const client = createClient({
-      chain: studionet,
+      chain: "studionet",
       account: walletAddress,
       provider: window.ethereum
     });
 
     statusElement.textContent =
-      "Sending proposal to GenLayer...";
+      "Sending transaction to GenLayer...";
 
     const txHash =
       await client.writeContract({
@@ -158,41 +127,8 @@ reviewButton.addEventListener("click", async () => {
       "Transaction submitted.";
 
     resultElement.textContent =
-      `Transaction:\n${formatValue(txHash)}\n\nWaiting for GenLayer consensus...`;
+      `Transaction:\n${String(txHash)}`;
 
-    /*
-     * Wait for the transaction using the
-     * generic receipt method. We deliberately
-     * do not import TransactionStatus so that
-     * the browser module remains compatible.
-     */
-
-    let receipt;
-
-    try {
-      receipt =
-        await client.waitForTransactionReceipt({
-          hash: txHash
-        });
-    } catch (receiptError) {
-      console.warn(
-        "Receipt wait error:",
-        receiptError
-      );
-
-      resultElement.textContent =
-        `Transaction submitted:\n${formatValue(txHash)}\n\n` +
-        `The transaction was submitted, but the receipt could not be read yet.`;
-    }
-
-    if (receipt) {
-      resultElement.textContent =
-        `Transaction:\n${formatValue(txHash)}\n\n` +
-        `Receipt:\n${formatValue(receipt)}`;
-    }
-
-    statusElement.textContent =
-      "Proposal review transaction completed.";
   } catch (error) {
     showError(error);
   }
