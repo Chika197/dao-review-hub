@@ -119,128 +119,15 @@ async function getTransactionStatus(txHash) {
    ========================= */
 
 async function waitForConsensus(txHash) {
-  const maxAttempts = 200;
+  statusElement.textContent =
+    "Transaction submitted successfully.";
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const transaction =
-        await getTransactionStatus(txHash);
+  resultElement.textContent =
+    `Transaction:\n${txHash}\n\n` +
+    "GenLayer consensus is processing.\n\n" +
+    "Please check GenLayer Explorer for the final status.";
 
-      console.log(
-        "GenLayer transaction:",
-        transaction
-      );
-
-      const status =
-        transaction?.status;
-
-      const statusCode =
-        transaction?.statusCode;
-
-      if (
-        status === "FINALIZED" ||
-        statusCode === 7
-      ) {
-        statusElement.textContent =
-          "Review finalized by GenLayer.";
-
-        resultElement.textContent =
-          `Transaction:\n${txHash}\n\n` +
-          "Status: FINALIZED\n\n" +
-          "DAO proposal review successfully completed.";
-
-        return;
-      }
-
-      if (
-        status === "ACCEPTED" ||
-        statusCode === 5
-      ) {
-        statusElement.textContent =
-          "GenLayer: consensus accepted.";
-
-        resultElement.textContent =
-          `Transaction:\n${txHash}\n\n` +
-          "Status: ACCEPTED\n\n" +
-          "Waiting for finalization...";
-      }
-
-      else if (
-        status === "PENDING" ||
-        statusCode === 1
-      ) {
-        statusElement.textContent =
-          "GenLayer: transaction pending...";
-      }
-
-      else if (
-        status === "PROPOSING" ||
-        statusCode === 2
-      ) {
-        statusElement.textContent =
-          "GenLayer: proposing...";
-      }
-
-      else if (
-        status === "COMMITTING" ||
-        statusCode === 3
-      ) {
-        statusElement.textContent =
-          "GenLayer: validators committing...";
-      }
-
-      else if (
-        status === "REVEALING" ||
-        statusCode === 4
-      ) {
-        statusElement.textContent =
-          "GenLayer: validators revealing...";
-      }
-
-      else if (
-        status === "READY_TO_FINALIZE" ||
-        statusCode === 11
-      ) {
-        statusElement.textContent =
-          "GenLayer: ready for finalization...";
-      }
-
-      else if (
-        status === "CANCELED" ||
-        status === "LEADER_TIMEOUT" ||
-        status === "VALIDATORS_TIMEOUT"
-      ) {
-        throw new Error(
-          `Transaction ended with status: ${status}`
-        );
-      }
-
-      else {
-        statusElement.textContent =
-          `GenLayer status: ${
-            status || "UNKNOWN"
-          }`;
-      }
-
-    } catch (error) {
-      console.warn(
-        "Status check failed:",
-        error
-      );
-
-      statusElement.textContent =
-        "Checking GenLayer status...";
-    }
-
-    await new Promise(
-      resolve =>
-        setTimeout(resolve, 3000)
-    );
-  }
-
-  throw new Error(
-    "Consensus belum selesai setelah sekitar 10 menit. Cek transaksi di GenLayer Explorer."
-  );
+  return;
 }
 
 
