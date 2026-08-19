@@ -1,6 +1,5 @@
 import { createClient } from "https://esm.sh/genlayer-js";
 import { studionet } from "https://esm.sh/genlayer-js/chains";
-import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
@@ -35,19 +34,21 @@ function formatValue(value) {
       return JSON.stringify(
         value,
         (_, item) =>
-          typeof item === "bigint" ? item.toString() : item,
+          typeof item === "bigint"
+            ? item.toString()
+            : item,
         2
       );
     }
 
     return String(value);
-  } catch (error) {
+  } catch {
     return String(value);
   }
 }
 
 function showError(error) {
-  console.error(error);
+  console.error("DAO Review error:", error);
 
   statusElement.textContent =
     formatValue(error) || "Unknown error.";
@@ -55,18 +56,34 @@ function showError(error) {
   resultElement.textContent = "";
 }
 
+
+/* =========================
+   CONNECT WALLET
+   ========================= */
+
 connectButton.addEventListener("click", async () => {
   try {
     if (!window.ethereum) {
-      throw new Error("Browser wallet not detected.");
+      throw new Error(
+        "Browser wallet not detected."
+      );
     }
 
-    const accounts = await window.ethereum.request({
-      method: "eth_requestAccounts"
-    });
+    statusElement.textContent =
+      "Connecting wallet...";
 
-    if (!accounts || accounts.length === 0) {
-      throw new Error("No wallet account was returned.");
+    const accounts =
+      await window.ethereum.request({
+        method: "eth_requestAccounts"
+      });
+
+    if (
+      !accounts ||
+      accounts.length === 0
+    ) {
+      throw new Error(
+        "No wallet account was returned."
+      );
     }
 
     walletAddress = accounts[0];
@@ -81,23 +98,30 @@ connectButton.addEventListener("click", async () => {
   }
 });
 
+
+/* =========================
+   REVIEW DAO PROPOSAL
+   ========================= */
+
 reviewButton.addEventListener("click", async () => {
   try {
     if (!walletAddress) {
-      throw new Error("Connect your wallet first.");
+      throw new Error(
+        "Connect your wallet first."
+      );
     }
 
-    const proposalElement =
-      document.getElementById("proposal");
-
-    const criteriaElement =
-      document.getElementById("criteria");
-
     const proposal =
-      proposalElement.value.trim();
+      document
+        .getElementById("proposal")
+        .value
+        .trim();
 
     const criteria =
-      criteriaElement.value.trim();
+      document
+        .getElementById("criteria")
+        .value
+        .trim();
 
     if (!proposal || !criteria) {
       throw new Error(
@@ -106,7 +130,7 @@ reviewButton.addEventListener("click", async () => {
     }
 
     statusElement.textContent =
-      "Submitting proposal to GenLayer consensus...";
+      "Preparing GenLayer transaction...";
 
     resultElement.textContent = "";
 
@@ -117,32 +141,58 @@ reviewButton.addEventListener("click", async () => {
     });
 
     statusElement.textContent =
-      "Sending transaction to GenLayer...";
+      "Sending proposal to GenLayer...";
 
-    const txHash = await client.writeContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "review_proposal",
-      args: [proposal, criteria],
-      value: BigInt(0)
-    });
-
-    statusElement.textContent =
-      `Transaction submitted: ${formatValue(txHash)}`;
-
-    resultElement.textContent =
-      "Waiting for GenLayer consensus result...";
-
-    const receipt =
-      await client.waitForTransactionReceipt({
-        hash: txHash,
-        status: TransactionStatus.ACCEPTED
+    const txHash =
+      await client.writeContract({
+        address: CONTRACT_ADDRESS,
+        functionName: "review_proposal",
+        args: [
+          proposal,
+          criteria
+        ],
+        value: BigInt(0)
       });
 
+    statusElement.textContent =
+      "Transaction submitted.";
+
     resultElement.textContent =
-      formatValue(receipt);
+      `Transaction:\n${formatValue(txHash)}\n\nWaiting for GenLayer consensus...`;
+
+    /*
+     * Wait for the transaction using the
+     * generic receipt method. We deliberately
+     * do not import TransactionStatus so that
+     * the browser module remains compatible.
+     */
+
+    let receipt;
+
+    try {
+      receipt =
+        await client.waitForTransactionReceipt({
+          hash: txHash
+        });
+    } catch (receiptError) {
+      console.warn(
+        "Receipt wait error:",
+        receiptError
+      );
+
+      resultElement.textContent =
+        `Transaction submitted:\n${formatValue(txHash)}\n\n` +
+        `The transaction was submitted, but the receipt could not be read yet.`;
+    }
+
+    if (receipt) {
+      resultElement.textContent =
+        `Transaction:\n${formatValue(txHash)}\n\n` +
+        `Receipt:\n${formatValue(receipt)}`;
+    }
 
     statusElement.textContent =
-      "Proposal review completed.";
+      "Proposal review transaction completed.";
   } catch (error) {
     showError(error);
   }
