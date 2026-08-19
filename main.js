@@ -1,8 +1,10 @@
-import { createClient } from "https://esm.sh/genlayer-js";
-import { studionet } from "https://esm.sh/genlayer-js/chains";
+
+import { encodeFunctionData } from "https://esm.sh/viem";
 
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
+
+const STUDIONET_CHAIN_ID = "0xf1ef";
 
 const connectButton = document.getElementById("connect");
 const reviewButton = document.getElementById("review");
@@ -16,16 +18,9 @@ let walletProvider = null;
 function formatValue(value) {
   try {
     if (value === null || value === undefined) return "";
-
     if (typeof value === "string") return value;
-
-    if (typeof value === "bigint") {
-      return value.toString();
-    }
-
-    if (value instanceof Error) {
-      return value.message || String(value);
-    }
+    if (typeof value === "bigint") return value.toString();
+    if (value instanceof Error) return value.message || String(value);
 
     if (typeof value === "object") {
       return JSON.stringify(
@@ -87,8 +82,18 @@ connectButton.addEventListener("click", async () => {
     walletElement.textContent =
       `Wallet: ${walletAddress}`;
 
-    statusElement.textContent =
-      "Wallet connected.";
+    const chainId =
+      await walletProvider.request({
+        method: "eth_chainId"
+      });
+
+    if (chainId === STUDIONET_CHAIN_ID) {
+      statusElement.textContent =
+        "Wallet connected to GenLayer Studionet.";
+    } else {
+      statusElement.textContent =
+        `Wallet connected. Chain: ${chainId}`;
+    }
 
   } catch (error) {
     showError(error);
@@ -132,41 +137,79 @@ reviewButton.addEventListener("click", async () => {
       );
     }
 
+    const chainId =
+      await walletProvider.request({
+        method: "eth_chainId"
+      });
+
+    if (chainId !== STUDIONET_CHAIN_ID) {
+      throw new Error(
+        `Wallet belum di GenLayer Studionet. Chain sekarang: ${chainId}`
+      );
+    }
+
     statusElement.textContent =
-      "Connecting to GenLayer Studionet...";
+      "Preparing transaction...";
 
     resultElement.textContent = "";
 
-    /*
-     * Jangan gunakan client.connect().
-     * Ini untuk menghindari wallet_getSnaps.
-     */
+    const abi = [
+      {
+        type: "function",
+        name: "review_proposal",
+        stateMutability: "nonpayable",
+        inputs: [
+          {
+            name: "proposal",
+            type: "string"
+          },
+          {
+            name: "criteria",
+            type: "string"
+          }
+        ],
+        outputs: []
+      }
+    ];
 
-    const client = createClient({
-      chain: studionet,
-      account: walletAddress,
-      provider: walletProvider
-    });
-
-    statusElement.textContent =
-      "Sending proposal to GenLayer...";
-
-    const txHash =
-      await client.writeContract({
-        address: CONTRACT_ADDRESS,
+    const data =
+      encodeFunctionData({
+        abi,
         functionName: "review_proposal",
         args: [
           proposal,
           criteria
-        ],
-        value: BigInt(0)
+        ]
+      });
+
+    statusElement.textContent =
+      "Waiting for wallet confirmation...";
+
+    /*
+     * LANGSUNG KIRIM TRANSAKSI
+     * Tidak menggunakan genlayer-js.
+     * Tidak menggunakan client.connect().
+     * Tidak menggunakan client.writeContract().
+     */
+
+    const txHash =
+      await walletProvider.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            from: walletAddress,
+            to: CONTRACT_ADDRESS,
+            data: data,
+            value: "0x0"
+          }
+        ]
       });
 
     statusElement.textContent =
       "Transaction submitted.";
 
     resultElement.textContent =
-      `Transaction:\n${formatValue(txHash)}\n\n` +
+      `Transaction:\n${txHash}\n\n` +
       "Waiting for GenLayer consensus...";
 
   } catch (error) {
