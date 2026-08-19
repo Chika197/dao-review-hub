@@ -4,6 +4,8 @@ import { studionet } from "https://esm.sh/genlayer-js/chains";
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
 
+const STUDIONET_CHAIN_ID = "0xf1ef";
+
 const connectButton = document.getElementById("connect");
 const reviewButton = document.getElementById("review");
 const walletElement = document.getElementById("wallet");
@@ -13,16 +15,9 @@ const resultElement = document.getElementById("result");
 let walletAddress = null;
 let walletProvider = null;
 
-
-/* =========================
-   FORMAT VALUE
-   ========================= */
-
 function formatValue(value) {
   try {
-    if (value === null || value === undefined) {
-      return "";
-    }
+    if (value === null || value === undefined) return "";
 
     if (typeof value === "string") {
       return value;
@@ -53,11 +48,6 @@ function formatValue(value) {
   }
 }
 
-
-/* =========================
-   ERROR DISPLAY
-   ========================= */
-
 function showError(error) {
   console.error("DAO Review Error:", error);
 
@@ -77,19 +67,13 @@ function getEthereumProvider() {
     return null;
   }
 
-  /*
-   * Some browsers expose multiple wallets
-   * through window.ethereum.providers.
-   */
-
   if (
     Array.isArray(window.ethereum.providers) &&
     window.ethereum.providers.length > 0
   ) {
     /*
-     * Prefer MetaMask if available.
+     * Prefer MetaMask.
      */
-
     const metamask =
       window.ethereum.providers.find(
         (provider) => provider.isMetaMask
@@ -100,9 +84,24 @@ function getEthereumProvider() {
     }
 
     /*
-     * Otherwise use the first EVM provider.
+     * Prefer ChainBox.
+     * rdns = com.dataqin.simple
      */
+    const chainBox =
+      window.ethereum.providers.find(
+        (provider) =>
+          provider.isChainBox ||
+          provider.rdns === "com.dataqin.simple" ||
+          provider.info?.rdns === "com.dataqin.simple"
+      );
 
+    if (chainBox) {
+      return chainBox;
+    }
+
+    /*
+     * Fallback.
+     */
     return window.ethereum.providers[0];
   }
 
@@ -111,206 +110,254 @@ function getEthereumProvider() {
 
 
 /* =========================
+   SWITCH TO STUDIONET
+   ========================= */
+
+async function switchToStudionet(provider) {
+  const currentChainId =
+    await provider.request({
+      method: "eth_chainId"
+    });
+
+  if (currentChainId === STUDIONET_CHAIN_ID) {
+    return;
+  }
+
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [
+        {
+          chainId: STUDIONET_CHAIN_ID
+        }
+      ]
+    });
+  } catch (error) {
+    /*
+     * Chain not added to wallet.
+     */
+    if (error?.code !== 4902) {
+      throw error;
+    }
+
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [
+        {
+          chainId: STUDIONET_CHAIN_ID,
+          chainName: "GenLayer Studionet",
+          nativeCurrency: {
+            name: "GEN",
+            symbol: "GEN",
+            decimals: 18
+          },
+          rpcUrls: [
+            "https://studio.genlayer.com/api"
+          ],
+          blockExplorerUrls: [
+            "https://explorer-studio.genlayer.com"
+          ]
+        }
+      ]
+    });
+  }
+}
+
+
+/* =========================
    CONNECT WALLET
    ========================= */
 
-connectButton.addEventListener("click", async () => {
-  try {
-    statusElement.textContent =
-      "Detecting wallet...";
-
-    const provider =
-      getEthereumProvider();
-
-    if (!provider) {
-      throw new Error(
-        "EVM browser wallet tidak ditemukan. Silakan buka DAO Review dengan wallet EVM yang mendukung Studionet."
-      );
-    }
-
-    walletProvider = provider;
-
-    /*
-     * Request wallet account.
-     */
-
-    const accounts =
-      await walletProvider.request({
-        method: "eth_requestAccounts"
-      });
-
-    if (!accounts || accounts.length === 0) {
-      throw new Error(
-        "Wallet account tidak ditemukan."
-      );
-    }
-
-    walletAddress = accounts[0];
-
-    walletElement.textContent =
-      `Wallet: ${walletAddress}`;
-
-    statusElement.textContent =
-      "Wallet connected.";
-
-    /*
-     * Check current chain.
-     */
-
+connectButton.addEventListener(
+  "click",
+  async () => {
     try {
+      statusElement.textContent =
+        "Detecting wallet...";
+
+      const provider =
+        getEthereumProvider();
+
+      if (!provider) {
+        throw new Error(
+          "EVM browser wallet tidak ditemukan."
+        );
+      }
+
+      walletProvider = provider;
+
+      const accounts =
+        await walletProvider.request({
+          method: "eth_requestAccounts"
+        });
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error(
+          "Wallet account tidak ditemukan."
+        );
+      }
+
+      walletAddress = accounts[0];
+
+      walletElement.textContent =
+        `Wallet: ${walletAddress}`;
+
       const chainId =
         await walletProvider.request({
           method: "eth_chainId"
         });
 
       console.log(
-        "Current wallet chain:",
+        "Wallet chain:",
         chainId
       );
-    } catch (chainError) {
-      console.warn(
-        "Could not read chain ID:",
-        chainError
-      );
-    }
 
-  } catch (error) {
-    showError(error);
+      if (chainId === STUDIONET_CHAIN_ID) {
+        statusElement.textContent =
+          "Wallet connected to GenLayer Studionet.";
+      } else {
+        statusElement.textContent =
+          "Wallet connected. Klik Review Proposal.";
+      }
+
+    } catch (error) {
+      showError(error);
+    }
   }
-});
+);
 
 
 /* =========================
    REVIEW PROPOSAL
    ========================= */
 
-reviewButton.addEventListener("click", async () => {
-  try {
-    if (!walletAddress) {
-      throw new Error(
-        "Connect your wallet first."
-      );
-    }
-
-    if (!walletProvider) {
-      throw new Error(
-        "Wallet provider tidak tersedia. Connect wallet terlebih dahulu."
-      );
-    }
-
-    const proposalElement =
-      document.getElementById("proposal");
-
-    const criteriaElement =
-      document.getElementById("criteria");
-
-    if (!proposalElement || !criteriaElement) {
-      throw new Error(
-        "Proposal atau criteria input tidak ditemukan."
-      );
-    }
-
-    const proposal =
-      proposalElement.value.trim();
-
-    const criteria =
-      criteriaElement.value.trim();
-
-    if (!proposal) {
-      throw new Error(
-        "Proposal cannot be empty."
-      );
-    }
-
-    if (!criteria) {
-      throw new Error(
-        "Criteria cannot be empty."
-      );
-    }
-
-    statusElement.textContent =
-      "Connecting to GenLayer Studionet...";
-
-    resultElement.textContent = "";
-
-    /*
-     * Create GenLayer client.
-     */
-
-    const client = createClient({
-      chain: studionet,
-      account: walletAddress,
-      provider: walletProvider
-    });
-
-    /*
-     * Switch / connect wallet to Studionet.
-     */
-
-    await client.connect("studionet");
-
-    statusElement.textContent =
-      "Sending proposal to GenLayer...";
-
-    /*
-     * Send review transaction.
-     */
-
-    const txHash =
-      await client.writeContract({
-        address: CONTRACT_ADDRESS,
-        functionName: "review_proposal",
-        args: [
-          proposal,
-          criteria
-        ],
-        value: BigInt(0)
-      });
-
-    statusElement.textContent =
-      "Transaction submitted.";
-
-    resultElement.textContent =
-      `Transaction:\n${formatValue(txHash)}\n\n` +
-      "Waiting for GenLayer consensus...";
-
-    /*
-     * Wait for accepted transaction.
-     */
-
+reviewButton.addEventListener(
+  "click",
+  async () => {
     try {
-      const receipt =
-        await client.waitForTransactionReceipt({
-          hash: txHash,
-          status: "ACCEPTED"
+      if (!walletAddress || !walletProvider) {
+        throw new Error(
+          "Connect your wallet first."
+        );
+      }
+
+      const proposalElement =
+        document.getElementById("proposal");
+
+      const criteriaElement =
+        document.getElementById("criteria");
+
+      if (!proposalElement || !criteriaElement) {
+        throw new Error(
+          "Proposal atau criteria input tidak ditemukan."
+        );
+      }
+
+      const proposal =
+        proposalElement.value.trim();
+
+      const criteria =
+        criteriaElement.value.trim();
+
+      if (!proposal) {
+        throw new Error(
+          "Proposal cannot be empty."
+        );
+      }
+
+      if (!criteria) {
+        throw new Error(
+          "Criteria cannot be empty."
+        );
+      }
+
+      statusElement.textContent =
+        "Checking GenLayer Studionet...";
+
+      resultElement.textContent = "";
+
+      /*
+       * IMPORTANT:
+       * Jangan gunakan client.connect().
+       * Kita switch network langsung melalui
+       * EIP-1193 wallet provider.
+       *
+       * Ini menghindari wallet_getSnaps.
+       */
+
+      await switchToStudionet(
+        walletProvider
+      );
+
+      const finalChainId =
+        await walletProvider.request({
+          method: "eth_chainId"
+        });
+
+      if (finalChainId !== STUDIONET_CHAIN_ID) {
+        throw new Error(
+          `Wallet belum berada di GenLayer Studionet. Chain: ${finalChainId}`
+        );
+      }
+
+      statusElement.textContent =
+        "Sending proposal to GenLayer...";
+
+      const client =
+        createClient({
+          chain: studionet,
+          account: walletAddress,
+          provider: walletProvider
+        });
+
+      const txHash =
+        await client.writeContract({
+          address: CONTRACT_ADDRESS,
+          functionName: "review_proposal",
+          args: [
+            proposal,
+            criteria
+          ],
+          value: BigInt(0)
         });
 
       statusElement.textContent =
-        "Review accepted by GenLayer.";
+        "Transaction submitted.";
 
       resultElement.textContent =
         `Transaction:\n${formatValue(txHash)}\n\n` +
-        `Result:\n${formatValue(receipt)}`;
+        "Waiting for GenLayer consensus...";
 
-    } catch (receiptError) {
-      /*
-       * Transaction may already have been
-       * submitted even if receipt polling fails.
-       */
+      try {
+        const receipt =
+          await client.waitForTransactionReceipt({
+            hash: txHash,
+            status: "ACCEPTED"
+          });
 
-      console.warn(
-        "Receipt polling failed:",
-        receiptError
-      );
+        statusElement.textContent =
+          "Review accepted by GenLayer.";
 
-      statusElement.textContent =
-        "Transaction submitted. Check GenLayer Studio for the result.";
+        resultElement.textContent =
+          `Transaction:\n${formatValue(txHash)}\n\n` +
+          `Result:\n${formatValue(receipt)}`;
 
-      resultElement.textContent =
-        `Transaction:\n${formatValue(txHash)}`;
+      } catch (receiptError) {
+
+        console.warn(
+          "Receipt polling failed:",
+          receiptError
+        );
+
+        statusElement.textContent =
+          "Transaction submitted. Check GenLayer Studio.";
+
+        resultElement.textContent =
+          `Transaction:\n${formatValue(txHash)}`;
+      }
+
+    } catch (error) {
+      showError(error);
     }
-
-  } catch (error) {
-    showError(error);
   }
-});
+);
