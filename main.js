@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/genlayer-js";
+import { studionet } from "https://esm.sh/genlayer-js/chains";
+import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
-const CONTRACT_ADDRESS = "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
+const CONTRACT_ADDRESS =
+  "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
 
 const connectButton = document.getElementById("connect");
 const reviewButton = document.getElementById("review");
@@ -38,14 +41,18 @@ function formatValue(value) {
     }
 
     return String(value);
-  } catch {
+  } catch (error) {
     return String(value);
   }
 }
 
 function showError(error) {
-  const message = formatValue(error);
-  statusElement.textContent = message || "Unknown error.";
+  console.error(error);
+
+  statusElement.textContent =
+    formatValue(error) || "Unknown error.";
+
+  resultElement.textContent = "";
 }
 
 connectButton.addEventListener("click", async () => {
@@ -58,14 +65,17 @@ connectButton.addEventListener("click", async () => {
       method: "eth_requestAccounts"
     });
 
-    if (!accounts || !accounts.length) {
+    if (!accounts || accounts.length === 0) {
       throw new Error("No wallet account was returned.");
     }
 
     walletAddress = accounts[0];
 
-    walletElement.textContent = `Wallet: ${walletAddress}`;
-    statusElement.textContent = "Wallet connected.";
+    walletElement.textContent =
+      `Wallet: ${walletAddress}`;
+
+    statusElement.textContent =
+      "Wallet connected.";
   } catch (error) {
     showError(error);
   }
@@ -77,14 +87,22 @@ reviewButton.addEventListener("click", async () => {
       throw new Error("Connect your wallet first.");
     }
 
-    const proposalElement = document.getElementById("proposal");
-    const criteriaElement = document.getElementById("criteria");
+    const proposalElement =
+      document.getElementById("proposal");
 
-    const proposal = proposalElement.value.trim();
-    const criteria = criteriaElement.value.trim();
+    const criteriaElement =
+      document.getElementById("criteria");
+
+    const proposal =
+      proposalElement.value.trim();
+
+    const criteria =
+      criteriaElement.value.trim();
 
     if (!proposal || !criteria) {
-      throw new Error("Proposal and criteria are required.");
+      throw new Error(
+        "Proposal and criteria are required."
+      );
     }
 
     statusElement.textContent =
@@ -93,12 +111,10 @@ reviewButton.addEventListener("click", async () => {
     resultElement.textContent = "";
 
     const client = createClient({
-      chain: "studionet",
+      chain: studionet,
       account: walletAddress,
       provider: window.ethereum
     });
-
-    await client.connect("studionet");
 
     statusElement.textContent =
       "Sending transaction to GenLayer...";
@@ -116,17 +132,17 @@ reviewButton.addEventListener("click", async () => {
     resultElement.textContent =
       "Waiting for GenLayer consensus result...";
 
-    const result = await client.readContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "get_status",
-      args: [],
-      stateStatus: "accepted"
-    });
+    const receipt =
+      await client.waitForTransactionReceipt({
+        hash: txHash,
+        status: TransactionStatus.ACCEPTED
+      });
 
-    resultElement.textContent = formatValue(result);
+    resultElement.textContent =
+      formatValue(receipt);
 
     statusElement.textContent =
-      "Proposal review request completed.";
+      "Proposal review completed.";
   } catch (error) {
     showError(error);
   }
