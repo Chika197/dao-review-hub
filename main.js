@@ -1,4 +1,6 @@
-import { encodeFunctionData } from "https://esm.sh/viem";
+import {
+  encodeFunctionData
+} from "https://esm.sh/viem";
 
 const CONTRACT_ADDRESS =
   "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
@@ -62,10 +64,14 @@ function formatValue(value) {
    ========================= */
 
 function showError(error) {
-  console.error("DAO Review Error:", error);
+  console.error(
+    "DAO Review Error:",
+    error
+  );
 
   statusElement.textContent =
-    formatValue(error) || "Unknown error.";
+    formatValue(error) ||
+    "Unknown error.";
 
   resultElement.textContent = "";
 }
@@ -124,6 +130,13 @@ async function getTransactionStatus(txHash) {
   }
 
 
+  if (!data.result) {
+    throw new Error(
+      "GenLayer RPC returned no transaction status."
+    );
+  }
+
+
   return data.result;
 }
 
@@ -142,104 +155,191 @@ async function waitForConsensus(txHash) {
     attempt++
   ) {
 
+    let transaction;
+
     try {
 
-      const transaction =
+      transaction =
         await getTransactionStatus(
           txHash
         );
 
+    } catch (error) {
 
-      const status =
-        transaction?.status;
-
-
-      console.log(
-        "GenLayer transaction status:",
-        status
+      console.error(
+        "Failed to check GenLayer status:",
+        error
       );
 
+      statusElement.textContent =
+        "Unable to read GenLayer status. Retrying...";
 
-      if (status === "PENDING") {
+      await new Promise(
+        resolve =>
+          setTimeout(resolve, 3000)
+      );
 
-        statusElement.textContent =
-          "GenLayer: transaction pending...";
-
-      }
-
-      else if (status === "PROPOSING") {
-
-        statusElement.textContent =
-          "GenLayer: proposing...";
-
-      }
-
-      else if (status === "COMMITTING") {
-
-        statusElement.textContent =
-          "GenLayer: validators committing...";
-
-      }
-
-      else if (status === "REVEALING") {
-
-        statusElement.textContent =
-          "GenLayer: validators revealing...";
-
-      }
-
-      else if (status === "ACCEPTED") {
-
-        statusElement.textContent =
-          "GenLayer: consensus accepted...";
-
-      }
-
-      else if (
-        status === "FINALIZED"
-      ) {
-
-        statusElement.textContent =
-          "✅ Review finalized by GenLayer.";
-
-        resultElement.textContent =
-          `Transaction:\n${txHash}\n\n` +
-          "Status: FINALIZED\n\n" +
-          "The DAO proposal review was successfully completed.";
-
-        return;
-      }
-
-      else {
-
-        statusElement.textContent =
-          `GenLayer status: ${
-            status || "UNKNOWN"
-          }`;
-
-      }
+      continue;
+    }
 
 
-      if (
-        status === "CANCELED" ||
-        status === "LEADER_TIMEOUT" ||
-        status === "VALIDATORS_TIMEOUT"
-      ) {
+    const status =
+      transaction?.status;
 
-        throw new Error(
-          `Transaction ended with status: ${status}`
-        );
 
-      }
+    const statusCode =
+      transaction?.statusCode;
+
+
+    console.log(
+      "GenLayer transaction:",
+      transaction
+    );
+
+
+    /* =====================
+       FINALIZED
+       ===================== */
+
+    if (
+      status === "FINALIZED" ||
+      statusCode === 7
+    ) {
+
+      statusElement.textContent =
+        "✅ Review finalized by GenLayer.";
+
+      resultElement.textContent =
+        `Transaction:\n${txHash}\n\n` +
+        "Status: FINALIZED\n\n" +
+        "The DAO proposal review was successfully completed.";
+
+      return;
+    }
+
+
+    /* =====================
+       ACCEPTED
+       ===================== */
+
+    if (
+      status === "ACCEPTED" ||
+      statusCode === 5
+    ) {
+
+      statusElement.textContent =
+        "GenLayer: consensus accepted. Waiting for finalization...";
+
+      resultElement.textContent =
+        `Transaction:\n${txHash}\n\n` +
+        "Status: ACCEPTED\n\n" +
+        "Waiting for finalization...";
 
     }
 
-    catch (error) {
 
-      console.warn(
-        "Status check failed:",
-        error
+    /* =====================
+       PENDING
+       ===================== */
+
+    else if (
+      status === "PENDING" ||
+      statusCode === 1
+    ) {
+
+      statusElement.textContent =
+        "GenLayer: transaction pending...";
+
+    }
+
+
+    /* =====================
+       PROPOSING
+       ===================== */
+
+    else if (
+      status === "PROPOSING" ||
+      statusCode === 2
+    ) {
+
+      statusElement.textContent =
+        "GenLayer: proposing...";
+
+    }
+
+
+    /* =====================
+       COMMITTING
+       ===================== */
+
+    else if (
+      status === "COMMITTING" ||
+      statusCode === 3
+    ) {
+
+      statusElement.textContent =
+        "GenLayer: validators committing...";
+
+    }
+
+
+    /* =====================
+       REVEALING
+       ===================== */
+
+    else if (
+      status === "REVEALING" ||
+      statusCode === 4
+    ) {
+
+      statusElement.textContent =
+        "GenLayer: validators revealing...";
+
+    }
+
+
+    /* =====================
+       READY TO FINALIZE
+       ===================== */
+
+    else if (
+      status === "READY_TO_FINALIZE" ||
+      statusCode === 11
+    ) {
+
+      statusElement.textContent =
+        "GenLayer: ready for finalization...";
+
+    }
+
+
+    /* =====================
+       FAILED STATES
+       ===================== */
+
+    else if (
+      status === "CANCELED" ||
+      status === "LEADER_TIMEOUT" ||
+      status === "VALIDATORS_TIMEOUT"
+    ) {
+
+      throw new Error(
+        `Transaction ended with status: ${status}`
       );
+
+    }
+
+
+    /* =====================
+       UNKNOWN
+       ===================== */
+
+    else {
+
+      statusElement.textContent =
+        `GenLayer status: ${
+          status || "UNKNOWN"
+        }`;
 
     }
 
@@ -280,11 +380,13 @@ connectButton.addEventListener(
       }
 
 
+      /*
+       * Gunakan provider wallet yang aktif.
+       * Tidak menggunakan wallet_getSnaps.
+       */
+
       walletProvider =
-        window.ethereum?.providers?.find(
-          provider =>
-            provider.isMetaMask
-        ) || window.ethereum;
+        window.ethereum;
 
 
       const accounts =
@@ -532,8 +634,7 @@ reviewButton.addEventListener(
 
 
       statusElement.textContent =
-        "Transaction submitted. Checking GenLayer...";
-
+        "Transaction submitted.";
 
       resultElement.textContent =
         `Transaction:\n${txHash}\n\n` +
