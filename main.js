@@ -64,7 +64,10 @@ connectButton.addEventListener("click", async () => {
       );
     }
 
-    walletProvider = window.ethereum;
+    walletProvider =
+  window.ethereum?.providers?.find(
+    (provider) => provider.isMetaMask
+  ) || window.ethereum;
 
     const accounts =
       await walletProvider.request({
