@@ -58,6 +58,9 @@ reviewButton.addEventListener("click", async () => {
   typeof result === "string" ? result : JSON.stringify(result, null, 2);
     statusElement.textContent = "Proposal review request completed.";
   } catch (error) {
-    statusElement.textContent = error instanceof Error ? error.message : String(error);
+    statusElement.textContent =
+  error instanceof Error
+    ? error.message
+    : JSON.stringify(error, null, 2);
   }
 });
