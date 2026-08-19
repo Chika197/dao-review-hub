@@ -1,34 +1,96 @@
 import { createClient } from "https://esm.sh/genlayer-js";
 
 const CONTRACT_ADDRESS = "0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459";
+
 const connectButton = document.getElementById("connect");
 const reviewButton = document.getElementById("review");
 const walletElement = document.getElementById("wallet");
 const statusElement = document.getElementById("status");
 const resultElement = document.getElementById("result");
+
 let walletAddress = null;
+
+function formatValue(value) {
+  try {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+
+    if (value instanceof Error) {
+      return value.message || String(value);
+    }
+
+    if (typeof value === "object") {
+      return JSON.stringify(
+        value,
+        (_, item) =>
+          typeof item === "bigint" ? item.toString() : item,
+        2
+      );
+    }
+
+    return String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function showError(error) {
+  const message = formatValue(error);
+  statusElement.textContent = message || "Unknown error.";
+}
 
 connectButton.addEventListener("click", async () => {
   try {
-    if (!window.ethereum) throw new Error("Browser wallet not detected.");
-    const accounts = await window.ethereum.request({method:"eth_requestAccounts"});
-    if (!accounts.length) throw new Error("No wallet account was returned.");
+    if (!window.ethereum) {
+      throw new Error("Browser wallet not detected.");
+    }
+
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts"
+    });
+
+    if (!accounts || !accounts.length) {
+      throw new Error("No wallet account was returned.");
+    }
+
     walletAddress = accounts[0];
+
     walletElement.textContent = `Wallet: ${walletAddress}`;
     statusElement.textContent = "Wallet connected.";
   } catch (error) {
-    statusElement.textContent = error instanceof Error ? error.message : String(error);
+    showError(error);
   }
 });
 
 reviewButton.addEventListener("click", async () => {
   try {
-    if (!walletAddress) throw new Error("Connect your wallet first.");
-    const proposal = document.getElementById("proposal").value.trim();
-    const criteria = document.getElementById("criteria").value.trim();
-    if (!proposal || !criteria) throw new Error("Proposal and criteria are required.");
+    if (!walletAddress) {
+      throw new Error("Connect your wallet first.");
+    }
 
-    statusElement.textContent = "Submitting proposal to GenLayer consensus...";
+    const proposalElement = document.getElementById("proposal");
+    const criteriaElement = document.getElementById("criteria");
+
+    const proposal = proposalElement.value.trim();
+    const criteria = criteriaElement.value.trim();
+
+    if (!proposal || !criteria) {
+      throw new Error("Proposal and criteria are required.");
+    }
+
+    statusElement.textContent =
+      "Submitting proposal to GenLayer consensus...";
+
+    resultElement.textContent = "";
 
     const client = createClient({
       chain: "studionet",
@@ -38,6 +100,9 @@ reviewButton.addEventListener("click", async () => {
 
     await client.connect("studionet");
 
+    statusElement.textContent =
+      "Sending transaction to GenLayer...";
+
     const txHash = await client.writeContract({
       address: CONTRACT_ADDRESS,
       functionName: "review_proposal",
@@ -45,7 +110,11 @@ reviewButton.addEventListener("click", async () => {
       value: BigInt(0)
     });
 
-    statusElement.textContent = `Transaction submitted: ${txHash}`;
+    statusElement.textContent =
+      `Transaction submitted: ${formatValue(txHash)}`;
+
+    resultElement.textContent =
+      "Waiting for GenLayer consensus result...";
 
     const result = await client.readContract({
       address: CONTRACT_ADDRESS,
@@ -54,13 +123,11 @@ reviewButton.addEventListener("click", async () => {
       stateStatus: "accepted"
     });
 
-    resultElement.textContent =
-  typeof result === "string" ? result : JSON.stringify(result, null, 2);
-    statusElement.textContent = "Proposal review request completed.";
-  } catch (error) {
+    resultElement.textContent = formatValue(result);
+
     statusElement.textContent =
-  error instanceof Error
-    ? error.message
-    : JSON.stringify(error, null, 2);
+      "Proposal review request completed.";
+  } catch (error) {
+    showError(error);
   }
 });
