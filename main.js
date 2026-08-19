@@ -11,6 +11,12 @@ const statusElement = document.getElementById("status");
 const resultElement = document.getElementById("result");
 
 let walletAddress = null;
+let walletProvider = null;
+
+
+/* =========================
+   FORMAT VALUE
+   ========================= */
 
 function formatValue(value) {
   try {
@@ -47,8 +53,13 @@ function formatValue(value) {
   }
 }
 
+
+/* =========================
+   ERROR DISPLAY
+   ========================= */
+
 function showError(error) {
-  console.error(error);
+  console.error("DAO Review Error:", error);
 
   statusElement.textContent =
     formatValue(error) || "Unknown error.";
@@ -58,22 +69,73 @@ function showError(error) {
 
 
 /* =========================
+   FIND EVM WALLET
+   ========================= */
+
+function getEthereumProvider() {
+  if (!window.ethereum) {
+    return null;
+  }
+
+  /*
+   * Some browsers expose multiple wallets
+   * through window.ethereum.providers.
+   */
+
+  if (
+    Array.isArray(window.ethereum.providers) &&
+    window.ethereum.providers.length > 0
+  ) {
+    /*
+     * Prefer MetaMask if available.
+     */
+
+    const metamask =
+      window.ethereum.providers.find(
+        (provider) => provider.isMetaMask
+      );
+
+    if (metamask) {
+      return metamask;
+    }
+
+    /*
+     * Otherwise use the first EVM provider.
+     */
+
+    return window.ethereum.providers[0];
+  }
+
+  return window.ethereum;
+}
+
+
+/* =========================
    CONNECT WALLET
    ========================= */
 
 connectButton.addEventListener("click", async () => {
   try {
-    if (!window.ethereum) {
+    statusElement.textContent =
+      "Detecting wallet...";
+
+    const provider =
+      getEthereumProvider();
+
+    if (!provider) {
       throw new Error(
-        "Browser wallet tidak ditemukan."
+        "EVM browser wallet tidak ditemukan. Silakan buka DAO Review dengan wallet EVM yang mendukung Studionet."
       );
     }
 
-    statusElement.textContent =
-      "Connecting wallet...";
+    walletProvider = provider;
+
+    /*
+     * Request wallet account.
+     */
 
     const accounts =
-      await window.ethereum.request({
+      await walletProvider.request({
         method: "eth_requestAccounts"
       });
 
@@ -90,6 +152,28 @@ connectButton.addEventListener("click", async () => {
 
     statusElement.textContent =
       "Wallet connected.";
+
+    /*
+     * Check current chain.
+     */
+
+    try {
+      const chainId =
+        await walletProvider.request({
+          method: "eth_chainId"
+        });
+
+      console.log(
+        "Current wallet chain:",
+        chainId
+      );
+    } catch (chainError) {
+      console.warn(
+        "Could not read chain ID:",
+        chainError
+      );
+    }
+
   } catch (error) {
     showError(error);
   }
@@ -108,21 +192,39 @@ reviewButton.addEventListener("click", async () => {
       );
     }
 
+    if (!walletProvider) {
+      throw new Error(
+        "Wallet provider tidak tersedia. Connect wallet terlebih dahulu."
+      );
+    }
+
+    const proposalElement =
+      document.getElementById("proposal");
+
+    const criteriaElement =
+      document.getElementById("criteria");
+
+    if (!proposalElement || !criteriaElement) {
+      throw new Error(
+        "Proposal atau criteria input tidak ditemukan."
+      );
+    }
+
     const proposal =
-      document
-        .getElementById("proposal")
-        .value
-        .trim();
+      proposalElement.value.trim();
 
     const criteria =
-      document
-        .getElementById("criteria")
-        .value
-        .trim();
+      criteriaElement.value.trim();
 
-    if (!proposal || !criteria) {
+    if (!proposal) {
       throw new Error(
-        "Proposal and criteria are required."
+        "Proposal cannot be empty."
+      );
+    }
+
+    if (!criteria) {
+      throw new Error(
+        "Criteria cannot be empty."
       );
     }
 
@@ -131,16 +233,28 @@ reviewButton.addEventListener("click", async () => {
 
     resultElement.textContent = "";
 
+    /*
+     * Create GenLayer client.
+     */
+
     const client = createClient({
       chain: studionet,
       account: walletAddress,
-      provider: window.ethereum
+      provider: walletProvider
     });
+
+    /*
+     * Switch / connect wallet to Studionet.
+     */
 
     await client.connect("studionet");
 
     statusElement.textContent =
       "Sending proposal to GenLayer...";
+
+    /*
+     * Send review transaction.
+     */
 
     const txHash =
       await client.writeContract({
@@ -159,6 +273,42 @@ reviewButton.addEventListener("click", async () => {
     resultElement.textContent =
       `Transaction:\n${formatValue(txHash)}\n\n` +
       "Waiting for GenLayer consensus...";
+
+    /*
+     * Wait for accepted transaction.
+     */
+
+    try {
+      const receipt =
+        await client.waitForTransactionReceipt({
+          hash: txHash,
+          status: "ACCEPTED"
+        });
+
+      statusElement.textContent =
+        "Review accepted by GenLayer.";
+
+      resultElement.textContent =
+        `Transaction:\n${formatValue(txHash)}\n\n` +
+        `Result:\n${formatValue(receipt)}`;
+
+    } catch (receiptError) {
+      /*
+       * Transaction may already have been
+       * submitted even if receipt polling fails.
+       */
+
+      console.warn(
+        "Receipt polling failed:",
+        receiptError
+      );
+
+      statusElement.textContent =
+        "Transaction submitted. Check GenLayer Studio for the result.";
+
+      resultElement.textContent =
+        `Transaction:\n${formatValue(txHash)}`;
+    }
 
   } catch (error) {
     showError(error);
