@@ -54,7 +54,8 @@ reviewButton.addEventListener("click", async () => {
       stateStatus: "accepted"
     });
 
-    resultElement.textContent = JSON.stringify(result, null, 2);
+    resultElement.textContent =
+  typeof result === "string" ? result : JSON.stringify(result, null, 2);
     statusElement.textContent = "Proposal review request completed.";
   } catch (error) {
     statusElement.textContent = error instanceof Error ? error.message : String(error);
