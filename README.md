@@ -1,53 +1,25 @@
 # DAO Review Hub
 
-DAO Review Hub is a decentralized governance review application powered by a GenLayer Intelligent Contract.
+A static GitHub Pages frontend for a GenLayer-powered DAO proposal review workflow.
 
-## Overview
+## Contract
 
-Users can connect a browser wallet, submit a DAO proposal and governance criteria, and send the request to the deployed GenLayer `DAOProposalReview` Intelligent Contract.
-
-The contract evaluates the proposal using leader and validator consensus and stores the latest review result.
-
-## Workflow
-
-1. Connect a browser wallet.
-2. Enter a DAO proposal.
-3. Enter governance criteria.
-4. Submit the proposal to the GenLayer Intelligent Contract.
-5. Wait for the accepted transaction.
-6. Read the latest review state.
-7. Display the consensus result.
-
-## GenLayer Integration
-
-The frontend uses `genlayer-js` to interact with the deployed Intelligent Contract.
-
-Contract address:
-
+DAOProposalReview:
 `0x2C65A746cE6C33d959BEBA2ABcD4E7F7df5d8459`
 
-The application calls:
+## Frontend
 
-- `review_proposal` for proposal evaluation
-- `get_status` for reading the latest result
+The frontend connects to a browser wallet and uses `genlayer-js` from an ESM CDN.
 
-## Technology
+Features:
+- Wallet connection
+- DAO proposal input
+- Governance criteria input
+- `review_proposal` contract interaction
+- `get_status` result reading
 
-- GenLayer Intelligent Contracts
-- genlayer-js
-- TypeScript
-- Vite
-- Browser wallet
+## GitHub Pages
 
-## Setup
+This version is designed to be served directly from the repository root using GitHub Pages `Deploy from a branch`.
 
-```bash
-npm install
-npm run dev
-```
-
-The application is configured for GenLayer StudioNet.
-
-## License
-
-MIT
+No npm build step is required.
